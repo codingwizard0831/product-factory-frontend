@@ -57,6 +57,8 @@ export interface Paginator {
 export interface EditProfileProps {
     profile: ProfileType
     setProfile: Function
+    loginUrl: string
+    registerUrl: string
 }
 
 export interface TaskDetailProps {
@@ -72,6 +74,8 @@ export interface ProfileProps {
         id: string
     }
     refetchProfile: Function
+    loginUrl: string
+    registerUrl: string
 }
 
 export interface PagesBarProps {
