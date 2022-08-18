@@ -24,15 +24,18 @@ import {
     GET_TASK_BY_ID,
     GET_TASKS_BY_PRODUCT_SHORT,
     GET_LOGGED_IN_USER,
+    GET_CATEGORIES_LIST,
+    GET_EXPERTISES_LIST
 } from "../../../../graphql/queries";
 import {TASK_TYPES, USER_ROLES} from "../../../../graphql/types";
 import {
     ACCEPT_AGREEMENT,
-    CLAIM_TASK,
-    DELETE_TASK,
+    CLAIM_BOUNTY,
+    DELETE_CHALLENGE,
     IN_REVIEW_TASK,
-    LEAVE_TASK,
+    LEAVE_BOUNTY,
     REJECT_TASK,
+    REQUEST_REVISION_TASK,
     APPROVE_TASK,
 } from "../../../../graphql/mutations";
 import {getProp} from "../../../../utilities/filters";
@@ -56,10 +59,11 @@ import Head from "next/head";
 import ToReviewModal from "../../../../components/Products/ToReviewModal";
 import {UploadFile} from "antd/es/upload/interface";
 import DeliveryMessageModal from "../../../../components/Products/DeliveryMessageModal";
+import { BountySkill } from "../../../../components/Products/Bounty/interfaces";
 
 const {Panel} = Collapse;
 
-const actionName = "Claim the task";
+const actionName = "Claim the challenge";
 
 type Params = {
     user?: any;
@@ -75,7 +79,8 @@ const Task: React.FunctionComponent<Params> = ({
                                                     loginUrl,
                                                     registerUrl
                                                }) => {
-    const router = useRouter();
+    const router = useRouter();    
+  
     const {publishedId, personSlug, productSlug} = router.query;
 
     const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -96,6 +101,64 @@ const Task: React.FunctionComponent<Params> = ({
     const [license, setLicense] = useState("");
     const [actionName, setActionName] = useState("");
 
+    const [allSkills, setAllSkills] = React.useState([]);
+    const [allExpertises, setAllExpertises] = React.useState([]);
+
+    const {data: categories} = useQuery(GET_CATEGORIES_LIST);
+    const {data: expertises} = useQuery(GET_EXPERTISES_LIST);
+
+    const [claimedBountyId, setClaimedBountyId] = useState(0);
+
+    useEffect(() => {
+        if (categories?.taskCategoryListing) {
+            setAllSkills(JSON.parse(categories.taskCategoryListing));
+        }
+    }, [categories]);
+
+    useEffect(() => {
+        if (expertises?.expertisesListing) {
+            setAllExpertises(JSON.parse(expertises.expertisesListing));
+        }
+    }, [expertises]);
+
+    const getSkillParent = (skillId): string => {
+        let parentName = "N/A";
+
+        for(let skill of allSkills) {
+            for(let childSkill of skill.children) {
+                if(childSkill.id == skillId) return skill.name
+            }
+        }
+
+        return "N/A";
+    }
+
+    const getBountyAssignee = (bounty) => {
+        let allBountyClaims = task.bountyClaim;
+        let claimingPerson = "";
+        let selfClaimed = false;
+
+        for(let bountyClaim of allBountyClaims) {
+            if(bountyClaim.bounty.id == bounty.id && bountyClaim.kind != 2) {
+                if(bountyClaim.person.id === user.id) {
+                    claimingPerson = "you";
+                    selfClaimed = true;
+                } 
+                else
+                    claimingPerson = bountyClaim.person.slug;
+
+                break
+            }
+        }
+
+        return (
+            <span style={{ fontSize: 13, }}>
+                Claimed by {selfClaimed ? 
+                    claimingPerson : (<a href={`/${claimingPerson}`}>@{claimingPerson}</a>)}                
+            </span>
+        )
+    }
+
     const [isContributionGuideVisible, setIsContributionGuideVisible] = useState(false);
     const showCotributionGuide = () => {
         setIsContributionGuideVisible(true);
@@ -109,7 +172,10 @@ const Task: React.FunctionComponent<Params> = ({
         setIsContributionGuideVisible(false);
     };
 
-    const [getPersonData, {data: personData}] = useLazyQuery(GET_PERSON, {fetchPolicy: "no-cache"});
+    const [getPersonData, {data: personData}] = useLazyQuery(GET_PERSON, {
+        fetchPolicy: "no-cache",
+        variables: {id: user.id},
+    });
 
     const {data: original, error, loading, refetch} = useQuery(GET_TASK_BY_ID, {
         fetchPolicy: "no-cache",
@@ -138,23 +204,17 @@ const Task: React.FunctionComponent<Params> = ({
         }
     }, [tasksData]);
 
-    useEffect(() => {
-        if (!error) {
-            setTaskId(getProp(original, "task.id", 0));
-        }
-    }, [original]);
-
     const getBasePath = () => {
         return `/${personSlug}/${productSlug}`;
     };
 
-    const [deleteTask] = useMutation(DELETE_TASK, {
+    const [deleteChallenge] = useMutation(DELETE_CHALLENGE, {
         variables: {
             id: taskId,
         },
         onCompleted() {
             message.success("Item is successfully deleted!").then();
-            router.push(getBasePath() === "" ? "/" : `${getBasePath()}/tasks`).then();
+            router.push(getBasePath() === "" ? "/" : `${getBasePath()}/challenges`).then();
         },
         onError(e) {
             if(e.message === "The person is undefined, please login to perform this action") {
@@ -170,12 +230,12 @@ const Task: React.FunctionComponent<Params> = ({
         setAgreementModalVisible(false);
     };
 
-    const [leaveTask, {loading: leaveTaskLoading}] = useMutation(LEAVE_TASK, {
-        variables: {taskId},
+    const [leaveBounty, {loading: leaveTaskLoading}] = useMutation(LEAVE_BOUNTY, {
+        variables: {bountyId: claimedBountyId},
         onCompleted(data) {
-            const {leaveTask} = data;
-            const responseMessage = leaveTask.message;
-            if (leaveTask.success) {
+            const {leaveBounty} = data;
+            const responseMessage = leaveBounty.message;
+            if (leaveBounty.success) {
                 message.success(responseMessage).then();
                 fetchData().then();
                 showLeaveTaskModal(false);
@@ -188,7 +248,7 @@ const Task: React.FunctionComponent<Params> = ({
             if(e.message === "The person is undefined, please login to perform this action") {
                 showUnAuthModal("perform this action", loginUrl, registerUrl, true);
             } else {            
-                message.error("Failed to leave a task!").then();
+                message.error("Failed to leave the bounty!").then();
             }
         },
     });
@@ -246,6 +306,29 @@ const Task: React.FunctionComponent<Params> = ({
         }
     );
 
+    const [requestRevisionTask, {loading: requestRevisionTaskLoading}] = useMutation(
+        REQUEST_REVISION_TASK,
+        {
+            variables: {taskId},
+            onCompleted(data) {
+                const {requestRevisionTask} = data;
+                const responseMessage = requestRevisionTask.message;
+                if (requestRevisionTask.success) {
+                    message.success(responseMessage).then();
+                    fetchData().then();
+                    showRejectTaskModal(false);
+                    setDeliveryModal(false);
+                    getPersonData();
+                } else {
+                    message.error(responseMessage).then();
+                }
+            },
+            onError() {
+                message.error("Failed to request revision for a work!").then();
+            },
+        }
+    );
+
     const [approveTask, {loading: approveTaskLoading}] = useMutation(
         APPROVE_TASK,
         {
@@ -282,7 +365,7 @@ const Task: React.FunctionComponent<Params> = ({
             if (messageText !== "") {
                 if (status) {
                     message.success(messageText).then();
-                    claimTaskEvent();
+                    claimBountyEvent();
                 } else {
                     message.error(messageText).then();
                 }
@@ -307,37 +390,44 @@ const Task: React.FunctionComponent<Params> = ({
         }
     }, [licenseOriginal]);
 
-    const [claimTask, {loading: claimTaskLoading}] = useMutation(CLAIM_TASK, {
-        variables: {taskId},
+    const [claimBounty, {loading: claimTaskLoading}] = useMutation(CLAIM_BOUNTY, {        
         onCompleted(data) {
-            const {claimTask} = data;
-            const responseMessage = claimTask.message;
+            const {claimBounty} = data;
+            const responseMessage = claimBounty.message;
 
-            if (claimTask.isNeedAgreement) {
+            if (claimBounty.isNeedAgreement) {
                 setAgreementModalVisible(true);
                 message.info(responseMessage).then();
             } else {
-                if (claimTask.success) {
+                if (claimBounty.success) {
                     message.success(responseMessage).then();
                     fetchData().then();
                     getPersonData();
                 } else {
                     message
                         .error(
-                            claimTask.claimedTaskName ? (
+                            claimBounty.claimedTaskName ? (
                                 <div>
-                                    You already claimed another task on this product:
+                                    You already claimed another bounty on 
+                                    <span
+                                        className="pointer"
+                                        style={{color: "#1890ff"}}
+                                        onClick={() => {
+                                            router.push(claimBounty.claimedBountyProductLink);
+                                            message.destroy();
+                                        }}
+                                    > {claimBounty.claimedBountyProductName}</span>:                                     
                                     <div
                                         className="pointer"
                                         style={{color: "#1890ff"}}
                                         onClick={() => {
-                                            router.push(claimTask.claimedTaskLink);
+                                            router.push(claimBounty.claimedTaskLink);
                                             message.destroy();
                                         }}
                                     >
-                                        {claimTask.claimedTaskName}
+                                        {claimBounty.claimedTaskName}
                                     </div>
-                                    Please complete this task before claiming a new one.
+                                    Please complete this bounty before claiming a new one.
                                 </div>
                             ) : (
                                 responseMessage
@@ -345,6 +435,10 @@ const Task: React.FunctionComponent<Params> = ({
                             5
                         )
                         .then();
+
+                    // since the bounty claim failed, 
+                    // we need to set the claimed bounty ID from task data
+                    fetchData().then();
                 }
             }
         },
@@ -365,14 +459,16 @@ const Task: React.FunctionComponent<Params> = ({
         },
     });
 
-    const claimTaskEvent = () => {
+    const claimBountyEvent = (bountyId) => {
         let userId = user.id;
         if (userId === undefined || userId === null) {
             showUnAuthModal(actionName, loginUrl, registerUrl, true);
             return;
         }
 
-        claimTask().then();
+        setClaimedBountyId(bountyId);
+
+        claimBounty({variables: {bountyId: bountyId}});
     };
 
     const getCausedBy = (assignedTo: any) => {
@@ -394,7 +490,29 @@ const Task: React.FunctionComponent<Params> = ({
         }
     };
 
+    const updateClaimedBountyId = () => {
+        let bountyClaims = getProp(task, "bountyClaim", []);
+        let hasClaimedBounty = false;
+        for(let bountyClaim of bountyClaims) {
+            if(bountyClaim.person.id == user.id) {
+                setClaimedBountyId(bountyClaim.bounty.id);
+                hasClaimedBounty = true;
+                break;
+            }
+        }
+
+        if(!hasClaimedBounty)
+            setClaimedBountyId(0);
+
+    }
+
     useEffect(() => {
+        // set the claimed bounty
+        updateClaimedBountyId();            
+    }, [user, task])
+
+    useEffect(() => {
+
         if (personData && personData.person) {
             const {
                 firstName,
@@ -419,6 +537,7 @@ const Task: React.FunctionComponent<Params> = ({
                     };
                 }),
             });
+
         } else if (personData && personData.person === null) {
             userLogInAction({
                 isLoggedIn: false,
@@ -436,6 +555,7 @@ const Task: React.FunctionComponent<Params> = ({
     useEffect(() => {
         if (original) {
             setTask(getProp(original, "task", {}));
+            setTaskId(getProp(original, "task.id", 0));
         }
     }, [original]);
 
@@ -529,7 +649,7 @@ const Task: React.FunctionComponent<Params> = ({
                                         onClick={() => showLeaveTaskModal(true)}
                                         style={{zIndex: 1000}}
                                     >
-                                        Leave the task
+                                        Leave the bounty
                                     </Button>
                                 </div>
                             ) : null}
@@ -538,9 +658,9 @@ const Task: React.FunctionComponent<Params> = ({
                     {taskStatus === "Available" && (
                         <>
                             <div className="flex-column ml-auto mt-10">
-                                <Button type="primary" onClick={() => claimTaskEvent()}>
-                                    Claim the task
-                                </Button>
+                                {/* <Button type="primary" onClick={() => claimTaskEvent()}>
+                                    Claim the challenge
+                                </Button> */}
                                 {contributionGuide && (
                                 <>
                                     <a style={{textAlign: 'center', marginTop: '5px', fontSize: '13px'}} 
@@ -635,7 +755,7 @@ const Task: React.FunctionComponent<Params> = ({
                                         <a href={getBasePath()}>{getProp(product, "name", "")}</a>
                                     </Breadcrumb.Item>
                                     <Breadcrumb.Item>
-                                        <a href={`${getBasePath()}/tasks`}>Tasks</a>
+                                        <a href={`${getBasePath()}/challenges`}>Challenges</a>
                                     </Breadcrumb.Item>
                                     {initiativeName && (
                                         <Breadcrumb.Item>
@@ -701,6 +821,86 @@ const Task: React.FunctionComponent<Params> = ({
                                         </Col>
                                     </Row>
 
+                                    <Row className="mt-22">
+                                        <label style={{ fontSize: '15', paddingBottom: '10px', fontWeight: '500'}}>Bounty: </label>
+
+                                        <Row>
+                                            <Col>
+                                                <Row style={{backgroundColor: '#FAFAFA', padding: '10px', minWidth: 280}}>
+                                                    Skill
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{backgroundColor: '#FAFAFA', padding: '10px', minWidth: 300}}>
+                                                    Expertise
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{backgroundColor: '#FAFAFA', padding: '10px', width: 80}}>
+                                                    Points
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{backgroundColor: '#FAFAFA', padding: '10px', width: 120}}>
+                                                    Action
+                                                </Row>
+                                            </Col>
+                                        </Row>
+                                        {task.bounty && task.bounty.length > 0 && task.bounty.map((bounty, index) => (
+                                        <Row>
+                                            <Col>
+                                                <Row style={{   borderBottom: '1px solid #FAFAFA', height: "100%", 
+                                                                alignItems: "center", minWidth: 280, fontWeight: '500' }} key={index}>
+                                                    <Typography.Text style={{
+                                                        fontSize: 13,
+                                                        minWidth: 280,
+                                                        padding: 10,
+                                                        width: "max-content"
+                                                    }}>
+                                                    {getSkillParent(bounty.skill.id).slice(0, 12)}{'...->'}{bounty.skill.name}
+                                                    </Typography.Text>
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{   borderBottom: '1px solid #FAFAFA', height: "100%", 
+                                                                alignItems: "center", minWidth: 300, padding: 10, 
+                                                                textTransform: 'capitalize', fontWeight: '500' }} key={index}>
+                                                    {
+                                                        bounty.expertise.map((exp, idx) => { 
+                                                            return  (
+                                                                <span style={{ }}>
+                                                                        {idx>0?', ':''}{exp.name}
+                                                                </span> 
+                                                            )
+                                                        })
+                                                    }
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{   borderBottom: '1px solid #FAFAFA', height: "100%", 
+                                                                alignItems: "center", width: 80, 
+                                                                padding: '10px', fontWeight: '500' }} key={index}>
+                                                    {bounty.points}
+                                                </Row>
+                                            </Col>
+                                            <Col>
+                                                <Row style={{   borderBottom: '1px solid #FAFAFA', height: "100%", 
+                                                                alignItems: "center", width: 120, 
+                                                                padding: '10px', fontWeight: '500' }} key={index}>
+                                                    {
+                                                        bounty.status != 2 ? getBountyAssignee(bounty) :
+                                                        <Button type="primary" 
+                                                            onClick={() => {claimBountyEvent(bounty.id)}}
+                                                        >
+                                                            Claim
+                                                        </Button>                                                        
+                                                    }
+                                                </Row>
+                                            </Col>
+                                        </Row>
+                                        ))}                                    
+                                    </Row>
+
                                     <div className="mt-22">
                                         {getProp(task, "taskCategory", null) && (
                                             <Row style={{marginTop: 10}} className="text-sm mt-8">
@@ -718,7 +918,7 @@ const Task: React.FunctionComponent<Params> = ({
                                             </Row>
                                         )}
 
-                                        {showAssignedUser()}
+                                        {/* {showAssignedUser()} */}
                                         
                                         <Row style={{marginTop: 10}} className="text-sm mt-8">
                                             <strong className="my-auto">Created By: </strong>
@@ -879,7 +1079,7 @@ const Task: React.FunctionComponent<Params> = ({
                                             renderItem={(item: any) => (
                                                 <List.Item>
                                                     <Link
-                                                        href={`/${personSlug}/${item.product.slug}/tasks/${item.publishedId}`}
+                                                        href={`/${personSlug}/${item.product.slug}/challenges/${item.publishedId}`}
                                                     >
                                                         {item.title}
                                                     </Link>
@@ -898,7 +1098,7 @@ const Task: React.FunctionComponent<Params> = ({
                                             renderItem={(item: any) => (
                                                 <List.Item>
                                                     <Link
-                                                        href={`/${personSlug}/${item.product.slug}/tasks/${item.publishedId}`}
+                                                        href={`/${personSlug}/${item.product.slug}/challenges/${item.publishedId}`}
                                                     >
                                                         {item.title}
                                                     </Link>
@@ -918,8 +1118,8 @@ const Task: React.FunctionComponent<Params> = ({
                                 <DeleteModal
                                     modal={deleteModal}
                                     closeModal={() => showDeleteModal(false)}
-                                    submit={deleteTask}
-                                    title="Delete task"
+                                    submit={deleteChallenge}
+                                    title="Delete bounty"
                                 />
                             )}
                             {leaveTaskModal && (
@@ -928,10 +1128,10 @@ const Task: React.FunctionComponent<Params> = ({
                                     closeModal={() => showLeaveTaskModal(false)}
                                     submit={() => {
                                         showLeaveTaskModal(false);
-                                        leaveTask().then();
+                                        leaveBounty().then();
                                     }}
-                                    title="Leave the task"
-                                    message="Do you really want to leave the task?"
+                                    title="Leave the bounty"
+                                    message="Do you really want to leave the bounty?"
                                     submitText="Yes, leave"
                                 />
                             )}
@@ -964,10 +1164,12 @@ const Task: React.FunctionComponent<Params> = ({
                                 <CustomModal
                                     modal={rejectTaskModal}
                                     closeModal={() => showRejectTaskModal(false)}
-                                    submit={rejectTask}
+                                    submit={requestRevisionTask}
                                     title="Reject the work"
-                                    message="Do you really want to reject the work?"
-                                    submitText="Yes, reject"
+                                    message="Please choose one of the options below to reject the contribution."
+                                    submitText="Ask for revision"
+                                    secondarySubmits={[{text:"Unassign", action: rejectTask}]}
+                                    displayCancelButton={false}
                                 />
                             )}
                             {approveTaskModal && (
@@ -984,8 +1186,9 @@ const Task: React.FunctionComponent<Params> = ({
                                 <DeliveryMessageModal
                                     modal={deliveryModal}
                                     closeModal={() => setDeliveryModal(false)}
-                                    submit={approveTask}
                                     reject={rejectTask}
+                                    requestRevision={requestRevisionTask}
+                                    submit={approveTask}
                                     taskId={taskId}/>
                             )}
                         </>

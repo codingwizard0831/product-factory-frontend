@@ -123,7 +123,7 @@ export const GET_TASKS = gql`
         owner
         videoUrl
       }
-      task {
+      challenge {
         id
         priority
       }
@@ -219,7 +219,7 @@ export const GET_CAPABILITY_BY_ID = gql`
           slug
           owner
         }
-        task {
+        challenge {
           id
         }
       }
@@ -313,7 +313,7 @@ query GetInitiative($id: Int!, $input: TaskListInput!) {
         slug
         owner
       }
-      task {
+      challenge {
         id
       }
     }
@@ -372,11 +372,36 @@ export const GET_TASK_BY_ID = gql`
         id
         name
       }
-      taskCategory
-      taskExpertise {
+      bounty {
         id
-        name
+        skill {
+            id
+            name
+        }
+        expertise {
+            id
+            name
+        }
+        points
+        status
+        isActive
       }
+      bountyClaim {
+        id
+        kind
+        bounty {
+          id
+          status
+          isActive
+        }
+        person {
+            id
+            firstName
+            username
+            slug
+        }
+      }
+      skill
       dependOn {
         id
         title
@@ -415,7 +440,7 @@ export const GET_TASK_BY_ID = gql`
         id
         title
         description
-        category {
+        skill {
           id
           name
         }
@@ -454,7 +479,7 @@ export const GET_TASKS_BY_PRODUCT = gql`
         owner
         videoUrl
       }
-      task {
+      challenge {
         id
         priority
       }
@@ -483,7 +508,7 @@ export const GET_TASKS_BY_PRODUCT_SHORT = gql`
       id
       publishedId      
       title
-      task {
+      challenge {
         id
       }
     }
@@ -965,7 +990,7 @@ export const GET_CONTRIBUTOR_GUIDES = gql`
       id
       title
       description
-      category {
+      skill {
         id
         name
       }
@@ -989,7 +1014,7 @@ export const GET_TASK_DELIVERY_ATTEMPT = gql`
       },
       taskClaim {
         id
-        task {
+        challenge {
           id, 
           title
         }
@@ -1084,7 +1109,7 @@ export const GET_PERSON_DONE_TASKS = gql `
       title
       date
       link
-      category {
+      skill {
         id
         name
       }

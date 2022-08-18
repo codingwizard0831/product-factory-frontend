@@ -76,10 +76,10 @@ export const DELETE_PRODUCT = gql`
   }
 `;
 
-export const CREATE_TASK = gql`
-  mutation CreateTask($input: TaskInput!) {
-    createTask(input: $input) {
-      task {
+export const CREATE_CHALLENGE = gql`
+  mutation CreateChallenge($input: TaskInput!) {
+    createChallenge(input: $input) {
+      challenge {
         title
       }
       status
@@ -88,10 +88,10 @@ export const CREATE_TASK = gql`
   }
 `;
 
-export const UPDATE_TASK = gql`
-  mutation UpdateTask($input: TaskInput!, $id: Int!) {
-    updateTask(input: $input, id: $id) {
-      task {
+export const UPDATE_CHALLENGE = gql`
+  mutation UpdateChallenge($input: TaskInput!, $id: Int!) {
+    updateChallenge(input: $input, id: $id) {
+      challenge {
         title
       }
       status
@@ -191,10 +191,10 @@ export const DELETE_INITIATIVE = gql`
   }
 `;
 
-export const DELETE_TASK = gql`
-  mutation DeleteTask($id: Int!) {
-    deleteTask(id: $id) {
-      taskId
+export const DELETE_CHALLENGE = gql`
+  mutation DeleteChallenge($id: Int!) {
+    deleteChallenge(id: $id) {
+      challengeId
       status
     }
   }
@@ -262,23 +262,25 @@ export const ACTIVE_MARKET = gql`
   }
 `;
 
-export const LEAVE_TASK = gql`
-  mutation LeaveTask($taskId: Int!) {
-    leaveTask(taskId: $taskId) {
+export const LEAVE_BOUNTY = gql`
+  mutation LeaveBounty($bountyId: Int!) {
+    leaveBounty(bountyId: $bountyId) {
       success
       message
     }
   }
 `;
 
-export const CLAIM_TASK = gql`
-  mutation ClaimTask($taskId: Int!) {
-    claimTask(taskId: $taskId) {
+export const CLAIM_BOUNTY = gql`
+  mutation ClaimBounty($bountyId: Int!) {
+    claimBounty(bountyId: $bountyId) {
       success
       message
       isNeedAgreement
       claimedTaskLink
       claimedTaskName
+      claimedBountyProductName
+      claimedBountyProductLink
     }
   }
 `;
@@ -295,6 +297,15 @@ export const IN_REVIEW_TASK = gql`
 export const REJECT_TASK = gql`
   mutation rejectTask($taskId: Int!) {
     rejectTask(taskId: $taskId) {
+      success
+      message
+    }
+  }
+`;
+
+export const REQUEST_REVISION_TASK = gql`
+  mutation requestRevisionTask($taskId: Int!) {
+    requestRevisionTask(taskId: $taskId) {
       success
       message
     }
