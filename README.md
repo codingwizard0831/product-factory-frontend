@@ -1,4 +1,5 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Please note, this repo is deprecated. We are moving to [https://github.com/OpenUnited/platform](https://github.com/OpenUnited/platform)
+
 
 ## Getting Started
 
